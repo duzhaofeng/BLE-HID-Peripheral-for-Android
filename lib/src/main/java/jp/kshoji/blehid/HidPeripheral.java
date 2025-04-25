@@ -39,6 +39,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import jp.kshoji.blehid.util.BleUuidUtils;
 
@@ -195,6 +196,7 @@ public abstract class HidPeripheral {
     @Nullable
     private BluetoothGattServer gattServer;
     private final Map<String, BluetoothDevice> bluetoothDevicesMap = new HashMap<>();
+    private Queue<BluetoothGattService> servicesToAdd = new LinkedBlockingQueue<>();
 
     /**
      * Constructor<br />
@@ -240,8 +242,8 @@ public abstract class HidPeripheral {
 
         // setup services
         addService(setUpHidService(needInputReport, needOutputReport, needFeatureReport));
-        addService(setUpDeviceInformationService());
-        addService(setUpBatteryService());
+        servicesToAdd.add(setUpDeviceInformationService());
+        servicesToAdd.add(setUpBatteryService());
         
         // send report each dataSendingRate, if data available
         new Timer().scheduleAtFixedRate(new TimerTask() {
@@ -464,15 +466,15 @@ public abstract class HidPeripheral {
                 final AdvertiseData advertiseData = new Builder()
                         .setIncludeTxPowerLevel(false)
                         .setIncludeDeviceName(true)
-                        .addServiceUuid(ParcelUuid.fromString(SERVICE_DEVICE_INFORMATION.toString()))
                         .addServiceUuid(ParcelUuid.fromString(SERVICE_BLE_HID.toString()))
+                        .addServiceUuid(ParcelUuid.fromString(SERVICE_DEVICE_INFORMATION.toString()))
                         .addServiceUuid(ParcelUuid.fromString(SERVICE_BATTERY.toString()))
                         .build();
 
                 // set up scan result
                 final AdvertiseData scanResult = new Builder()
-                        .addServiceUuid(ParcelUuid.fromString(SERVICE_DEVICE_INFORMATION.toString()))
                         .addServiceUuid(ParcelUuid.fromString(SERVICE_BLE_HID.toString()))
+                        .addServiceUuid(ParcelUuid.fromString(SERVICE_DEVICE_INFORMATION.toString()))
                         .addServiceUuid(ParcelUuid.fromString(SERVICE_BATTERY.toString()))
                         .build();
 
@@ -750,6 +752,10 @@ public abstract class HidPeripheral {
 
             if (status != 0) {
                 Log.d(TAG, "onServiceAdded Adding Service failed..");
+            }
+
+            if (servicesToAdd.peek() != null) {
+                addService(servicesToAdd.remove());
             }
         }
     };
